@@ -43,8 +43,8 @@ for date in date_list:
     date_todo.append(date)
 
 # Assuming date_list is already generated
-for date in tqdm(date_todo, desc="Requesting data for days", unit="day"):
-    with open(f"{date}.json", 'w') as f:
+for date in tqdm(date_todo, desc="Requesting data for dates", unit="date"):
+    with open(f"{date}.json", 'wb') as f:
         # If the file doesn't exist, fetch the data
         try:
             # KRX API endpoint for foreign ownership data
@@ -67,8 +67,7 @@ for date in tqdm(date_todo, desc="Requesting data for days", unit="day"):
 
 
             response = session.get(url, params=params, timeout=30)
-
-            f.write(response.text)
+            f.write(response.content)
 
             response.raise_for_status()
 
