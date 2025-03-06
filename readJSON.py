@@ -70,10 +70,10 @@ for json_file in tqdm.tqdm(json_files, desc="Processing JSON files", unit="file"
                 columns.append(COLUMN_MAP[key])
                 values.append(value)
 
-                c.execute(f'''INSERT OR REPLACE INTO foreign_ownership (date, {", ".join(columns)}) 
-                              VALUES (?, {", ".join(["?"] * len(values))})''', [date] + values)
+        c.execute(f'''INSERT OR REPLACE INTO foreign_ownership (date, {", ".join(columns)}) 
+                        VALUES (?, {", ".join(["?"] * len(values))})''', [date] + values)
         
-        conn.commit()
-        c.close()
-        conn.close()
+conn.commit()
+c.close()
+conn.close()
         
