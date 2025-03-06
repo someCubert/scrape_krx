@@ -76,4 +76,3 @@ for json_file in tqdm.tqdm(json_files, desc="Processing JSON files", unit="file"
 conn.commit()
 c.close()
 conn.close()
-        
