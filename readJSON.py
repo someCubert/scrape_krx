@@ -1,6 +1,7 @@
 import sqlite3
 import json
 import os
+from pandas.io.formats.info import sys
 import tqdm
 import datetime
 
@@ -23,9 +24,9 @@ COLUMN_MAP = {
 conn = sqlite3.connect("foreign_ownership.db")
 c = conn.cursor()
 
-c.execute('''CREATE TABLE IF NOT EXISTS foreign_ownership 
+c.execute('''CREATE TABLE IF NOT EXISTS foreign_ownership
             (date DATE,
-             "Issue name" INTEGER,
+             "Issue name" TEXT,
              "Issue code" TEXT,
              "Close" REAL,
              "UpDown" TEXT,
@@ -36,8 +37,38 @@ c.execute('''CREATE TABLE IF NOT EXISTS foreign_ownership
              "Foreign ownership ratio" REAL,
              "Foreign ownership limit quantity" INTEGER,
              "Exhaustion rate" REAL,
+             Industry TEXT,
              PRIMARY KEY (date, "Issue name"))''')
 
+MAP_ISSUE_AND_DATE_TO_INDUSTRY = None
+with open("MAP_ISSUE_AND_DATE_TO_INDUSTRY.json","r") as f:
+    MAP_ISSUE_AND_DATE_TO_INDUSTRY = json.load(f)
+
+def get_most_common_value(l):
+    tmp = dict()
+    for i in l:
+        if not i in tmp:
+            tmp[i] = 0
+        tmp[i] += 1
+
+    max_val = None
+    max_num = 0
+    for (val,num) in tmp.items():
+        if num > max_num:
+            max_num = num
+            max_val = val
+
+    return max_val
+
+MAP_ISSUE_AND_DATE_TO_INDUSTRY_FALLBACK = dict()
+for (key,val) in MAP_ISSUE_AND_DATE_TO_INDUSTRY.items():
+    fallback_val = get_most_common_value(val.values())
+    MAP_ISSUE_AND_DATE_TO_INDUSTRY_FALLBACK[key] = fallback_val
+
+
+MAP_KONEX_ISSUE_AND_DATE_TO_INDUSTRY = None
+with open("MAP_KONEX_ISSUE_AND_DATE_TO_INDUSTRY.json","r") as f:
+    MAP_KONEX_ISSUE_AND_DATE_TO_INDUSTRY = json.load(f)
 
 json_files = []
 data_dir = "data"
@@ -53,14 +84,14 @@ for json_file in tqdm.tqdm(json_files, desc="Processing JSON files", unit="file"
     except ValueError:
         print(f"Skipping {json_file} - invalid date format")
         continue
-    
+
     BIGdata = None
     with open(json_file, 'rb') as f:
         try:
             BIGdata = json.load(f)
         except Exception as e:
             print(f"Error in {json_file} - invalid JSON format: {e}")
-            
+
 
     for row in BIGdata['output']:
         columns = []
@@ -70,9 +101,23 @@ for json_file in tqdm.tqdm(json_files, desc="Processing JSON files", unit="file"
                 columns.append(COLUMN_MAP[key])
                 values.append(value)
 
-        c.execute(f'''INSERT OR REPLACE INTO foreign_ownership (date, {", ".join(columns)}) 
-                        VALUES (?, {", ".join(["?"] * len(values))})''', [date] + values)
-        
+        key = row["ISU_SRT_CD"]
+
+        industry = None
+        if key in MAP_ISSUE_AND_DATE_TO_INDUSTRY:
+            if date_str in MAP_ISSUE_AND_DATE_TO_INDUSTRY[key]:
+                industry = MAP_ISSUE_AND_DATE_TO_INDUSTRY[key][date_str]
+            else:
+                industry = MAP_ISSUE_AND_DATE_TO_INDUSTRY_FALLBACK[key]
+        elif key in MAP_KONEX_ISSUE_AND_DATE_TO_INDUSTRY:
+            industry = MAP_KONEX_ISSUE_AND_DATE_TO_INDUSTRY[key]
+        else:
+            industry = None
+            #print("Error (no industry set): "+key+" : "+date_str)
+
+        c.execute(f'''INSERT OR REPLACE INTO foreign_ownership (date, {", ".join(columns)}, Industry)
+                        VALUES (?, {", ".join(["?"] * len(values))}, ?)''', [date] + values + [industry])
+
 conn.commit()
 c.close()
 conn.close()
