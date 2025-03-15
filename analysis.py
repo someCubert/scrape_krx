@@ -16,18 +16,15 @@ def calculate_date(date_str, days):
     new_date_str = new_date_obj.strftime('%Y-%m-%d')
     
     return new_date_str
-
-# date_str = '2025-01-11'
-# days = 20
-# new_date_str = calculate_date(date_str, days)
-
+    
 def policy_change_analysis(conn, date_str, before_days, after_days):
     before = calculate_date(date_str, before_days)
     after = calculate_date(date_str, after_days)
 
-    query = f"SELECT * FROM foreign_ownership WHERE date <= '{after}' AND date >= '{before}'"
+    query = f'SELECT "date", "Issue name", "Close", "Issue code", "No. of listed shares", "No. of shares of foreign ownership", "Foreign ownership ratio", "Foreign ownership limit quantity", "Exhaustion rate", "Industry" FROM foreign_ownership WHERE "date" <= "{after}" AND "date" >= "{before}"'
     df = pd.read_sql_query(query, conn)
-    print(df)
+    
+    
 
 policy_change_analysis(conn, '2024-01-11', -10, 10)
 
