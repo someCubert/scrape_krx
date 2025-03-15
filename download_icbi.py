@@ -10,7 +10,7 @@ def KOSPI(date):
     return {
         "bld": "dbms/MDC/STAT/standard/MDCSTAT03901",  # Foreign ownership by issue endpoint
         "locale": "en",
-        "trdDd": date,                             # Trading date in YYYYMMDD format
+        "trdDd": date.strftime("%Y%m%d"),                             # Trading date in YYYYMMDD format
         "mktId": "STK",                                # Get data for all stocks
         "money": "1",
         "csvxls_isNo": "false",
@@ -20,7 +20,7 @@ def KOSDAQ(date):
     return {
         "bld": "dbms/MDC/STAT/standard/MDCSTAT03901",  # Foreign ownership by issue endpoint
         "locale": "en",
-        "trdDd": date,                             # Trading date in YYYYMMDD format
+        "trdDd": date.strftime("%Y%m%d"),                             # Trading date in YYYYMMDD format
         "mktId": "KSQ",                                # Get data for all stocks
         "segTpCd": "ALL",
         "money": "1",
@@ -51,13 +51,17 @@ start_date = datetime(2005, 10, 4)
 current_date = datetime.now()
 # Generate weekly dates from start_date to current_date
 dates = [
-    (datetime(2005, 10, 4),get_all_days_of_month_as_str(2005,10)),
-    (datetime(2005, 11, 1),get_all_days_of_month_as_str(2005,11)),
-    (datetime(2005, 12, 1),get_all_days_of_month_as_str(2005,12))
+    (datetime(2005, 10, 4), datetime(2005, 10, 13),get_all_days_of_month_as_str(2005,10)),
+    (datetime(2005, 11, 1), datetime(2005, 11, 13),get_all_days_of_month_as_str(2005,11)),
+    (datetime(2005, 12, 1), datetime(2005, 12, 13),get_all_days_of_month_as_str(2005,12))
 ]
-for year in range(start_date.year+1,current_date.year+1):
-    for month in range(1,13):
-        dates.append((datetime(year,month,1),get_all_days_of_month_as_str(year,month)))
+
+# Add remaining months with the first weekday of each month
+for year in range(start_date.year+1, current_date.year+1):
+    for month in range(1, 13):
+        first_weekday = datetime(year, month, 1)
+        other_date = datetime(year, month, 13)
+        dates.append((first_weekday, other_date, get_all_days_of_month_as_str(year, month)))
 
 # Create a persistent session for all requests
 session = requests.Session()
@@ -77,14 +81,14 @@ session.mount('http://', adapter)
 session.mount('https://', adapter)
 
 # Create a list of all combinations of type_func and dates
-params_list = [(dayinmonth, func(date)) for func in type_func for (date,dayinmonth) in dates]
+params_list = [(dayinmonth, func(date), func(dateOther)) for func in type_func for (date,dateOther,dayinmonth) in dates]
 
 url = "http://data.krx.co.kr/comm/bldAttendant/getJsonData.cmd"
 
 MAP_ISSUE_AND_DATE_TO_INDUSTRY = dict()
 
 # Assuming date_list is already generated
-for (days_in_month, params) in tqdm(params_list, desc="Requesting Industray classifiaciton for dates", unit="date"):
+for (days_in_month, params, paramsOther) in tqdm(params_list, desc="Requesting Industray classifiaciton for dates", unit="date"):
     try:
         # KRX API endpoint for foreign ownership data
         response = session.get(url, params=params, timeout=30)
@@ -93,6 +97,15 @@ for (days_in_month, params) in tqdm(params_list, desc="Requesting Industray clas
         obj: dict = response.json()
         if "block0" in obj.keys() or "block2" in obj.keys(): raise Exception("Other blocks")
 
+        time.sleep(2)
+
+        # KRX API endpoint for foreign ownership data
+        responseOther = session.get(url, params=paramsOther, timeout=30)
+        responseOther.raise_for_status()
+
+        objOther: dict = responseOther.json()
+        if "block0" in objOther.keys() or "block2" in objOther.keys(): raise Exception("Other blocks")
+
         for issue in obj["block1"]:
             key = issue['ISU_SRT_CD']
             industry = issue['IDX_IND_NM']
@@ -100,7 +113,17 @@ for (days_in_month, params) in tqdm(params_list, desc="Requesting Industray clas
             if not key in MAP_ISSUE_AND_DATE_TO_INDUSTRY:
                 MAP_ISSUE_AND_DATE_TO_INDUSTRY[key] = dict()
 
-            for d in days_in_month:
+            for d in days_in_month[:12]:
+                MAP_ISSUE_AND_DATE_TO_INDUSTRY[key][d] = industry
+
+        for issue in objOther["block1"]:
+            key = issue['ISU_SRT_CD']
+            industry = issue['IDX_IND_NM']
+
+            if not key in MAP_ISSUE_AND_DATE_TO_INDUSTRY:
+                MAP_ISSUE_AND_DATE_TO_INDUSTRY[key] = dict()
+
+            for d in days_in_month[12:]:
                 MAP_ISSUE_AND_DATE_TO_INDUSTRY[key][d] = industry
 
         #print(f"Success processing date {date}")
@@ -111,7 +134,7 @@ for (days_in_month, params) in tqdm(params_list, desc="Requesting Industray clas
         import traceback
         traceback.print_exc()
 
-    time.sleep(3)
+    time.sleep(2)
 
 with open("MAP_ISSUE_AND_DATE_TO_INDUSTRY.json","w") as f:
     json.dump(MAP_ISSUE_AND_DATE_TO_INDUSTRY,f)

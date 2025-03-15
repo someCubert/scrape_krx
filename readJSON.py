@@ -65,11 +65,6 @@ for (key,val) in MAP_ISSUE_AND_DATE_TO_INDUSTRY.items():
     fallback_val = get_most_common_value(val.values())
     MAP_ISSUE_AND_DATE_TO_INDUSTRY_FALLBACK[key] = fallback_val
 
-
-MAP_KONEX_ISSUE_AND_DATE_TO_INDUSTRY = None
-with open("MAP_KONEX_ISSUE_AND_DATE_TO_INDUSTRY.json","r") as f:
-    MAP_KONEX_ISSUE_AND_DATE_TO_INDUSTRY = json.load(f)
-
 json_files = []
 data_dir = "data"
 for filename in os.listdir(data_dir):
@@ -109,11 +104,11 @@ for json_file in tqdm.tqdm(json_files, desc="Processing JSON files", unit="file"
                 industry = MAP_ISSUE_AND_DATE_TO_INDUSTRY[key][date_str]
             else:
                 industry = MAP_ISSUE_AND_DATE_TO_INDUSTRY_FALLBACK[key]
-        elif key in MAP_KONEX_ISSUE_AND_DATE_TO_INDUSTRY:
-            industry = MAP_KONEX_ISSUE_AND_DATE_TO_INDUSTRY[key]
         else:
             industry = None
-            #print("Error (no industry set): "+key+" : "+date_str)
+            
+        if industry == None:
+            continue
 
         c.execute(f'''INSERT OR REPLACE INTO foreign_ownership (date, {", ".join(columns)}, Industry)
                         VALUES (?, {", ".join(["?"] * len(values))}, ?)''', [date] + values + [industry])
