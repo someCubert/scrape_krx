@@ -106,9 +106,9 @@ for json_file in tqdm.tqdm(json_files, desc="Processing JSON files", unit="file"
                 industry = MAP_ISSUE_AND_DATE_TO_INDUSTRY_FALLBACK[key]
         else:
             industry = None
-            
-        if industry == None:
-            continue
+
+        #if industry == None:
+        #    continue
 
         c.execute(f'''INSERT OR REPLACE INTO foreign_ownership (date, {", ".join(columns)}, Industry)
                         VALUES (?, {", ".join(["?"] * len(values))}, ?)''', [date] + values + [industry])
