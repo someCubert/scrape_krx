@@ -41,6 +41,8 @@ def policy_change_analysis(conn, date_str, event_1, event_2, est_1, est_2, const
     df_main = pd.read_sql_query(query1, conn)
     df_main["Close"] = df_main["Close"].str.replace(',','').astype(float)
     df_main["No. of listed shares"] = df_main["No. of listed shares"].str.replace(',','').astype(int)
+    df_main["Exhaustion rate"] = df_main["Exhaustion rate"].astype(float)
+
     market = calculate_market_cap_weight(df_main)
     industry = calculate_market_cap_weight_industry(df_main)
     KOSPI200 = calculate_market_cap_weight_KOSPI200(df_main, const)
