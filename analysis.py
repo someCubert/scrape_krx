@@ -43,23 +43,26 @@ def policy_change_analysis(conn, date_str, event_1, event_2, est_1, est_2, const
     df_main["No. of listed shares"] = df_main["No. of listed shares"].str.replace(',','').astype(int)
     df_main["Exhaustion rate"] = df_main["Exhaustion rate"].astype(float)
     df_main["Daily change (ER)"] = df_main.groupby('Issue code')['Exhaustion rate'].diff().fillna(0)
-    market = calculate_market_cap_weight(df_main)
-    industry = calculate_market_cap_weight_industry(df_main)
-    KOSPI200 = calculate_market_cap_weight_KOSPI200(df_main, const)
 
     est_before = calculate_date(date_str, est_2)
     est_after = calculate_date(date_str, est_1)
     query2 = f'SELECT "date", "Issue name", "Close", "Issue code", "No. of listed shares", "No. of shares of foreign ownership", "Foreign ownership ratio", "Foreign ownership limit quantity", "Exhaustion rate", "Industry" FROM foreign_ownership WHERE "date" <= "{est_after}" AND "date" >= "{est_before}" AND not("Industry" is NULL)'
     df_est = pd.read_sql_query(query2, conn)
     df_est["Exhaustion rate"] = df_est["Exhaustion rate"].astype(float)
+    df_est["Close"] = df_est["Close"].str.replace(',','').astype(float)
+    df_est["No. of listed shares"] = df_est["No. of listed shares"].str.replace(',','').astype(int)
     df_est["Daily change (ER)"] = df_est.groupby('Issue code')['Exhaustion rate'].diff().fillna(0)
 
     EstChangePerIssueCode = df_est.groupby('Issue code')["Daily change (ER)"].mean()
     df_main['Est. daily change'] = df_main['Issue code'].map(EstChangePerIssueCode)
-    #print(df_main[df_main['Issue code'] == '005930'][['date', 'Exhaustion rate', 'Daily change (ER)', 'Est. daily change']])
+    # print(df_main[df_main['Issue code'] == '005930'][['date', 'Exhaustion rate', 'Daily change (ER)', 'Est. daily change']])
+
     # Hat in the sand xD
     df_main = df_main.dropna(subset=['Est. daily change'])
 
+    market = calculate_market_cap_weight(df_main)
+    industry = calculate_market_cap_weight_industry(df_main)
+    KOSPI200 = calculate_market_cap_weight_KOSPI200(df_main, const)
 
 
 
