@@ -17,23 +17,27 @@ def calculate_date(date_str, days):
     
     return new_date_str
 
-def calculate_market_cap_weight(df):
+def calculate_market_cap_weight(df, date_str):
+    df = df.copy()
     df['Market Cap'] = df['Close'] * df['No. of listed shares']
     df['Market Cap Weight'] = df.groupby('date')['Market Cap'].transform(lambda x: x / x.sum())
     return df
 
 def calculate_market_cap_weight_industry(df):
+    df = df.copy()
     df['Market Cap'] = df['Close'] * df['No. of listed shares']
     df['Market Cap Weight'] = df.groupby(['date', 'Industry'])['Market Cap'].transform(lambda x: x / x.sum())
     return df
 
 def calculate_market_cap_weight_KOSPI200(df, const):
+    df = df.copy()
     df_kospi200 = df[df['Issue code'].isin(const)].copy()
     df_kospi200['Market Cap'] = df_kospi200['Close'] * df_kospi200['No. of listed shares']
     df_kospi200['Market Cap Weight'] = df_kospi200.groupby('date')['Market Cap'].transform(lambda x: x / x.sum())
     return df_kospi200
 
 def policy_change_analysis(conn, date_str, event_1, event_2, est_1, est_2, const):
+    event_1 = event_1 - 1
     event_before = calculate_date(date_str, event_1)
     event_after = calculate_date(date_str, event_2)
 
@@ -59,11 +63,10 @@ def policy_change_analysis(conn, date_str, event_1, event_2, est_1, est_2, const
 
     # Hat in the sand xD
     df_main = df_main.dropna(subset=['Est. daily change'])
-
-    market = calculate_market_cap_weight(df_main)
+    
+    market = calculate_market_cap_weight(df_main, date_str)
     industry = calculate_market_cap_weight_industry(df_main)
     KOSPI200 = calculate_market_cap_weight_KOSPI200(df_main, const)
-
 
 
 # Add KOSPI200 constituents for each event date
