@@ -17,7 +17,7 @@ def calculate_date(date_str, days):
     
     return new_date_str
 
-def calculate_market_cap_weight(df, date_str):
+def calculate_CAAFO_market(df, date_str):
     df = df.copy()
     date = datetime.strptime(date_str, '%Y-%m-%d')
     df['date'] = pd.to_datetime(df['date'])
@@ -29,9 +29,14 @@ def calculate_market_cap_weight(df, date_str):
     company_weights = base_date_df.set_index('Issue code')['Market Cap Weight']
     df['Market Cap Weight'] = df['Issue code'].map(company_weights)
 
+    df = df[['date', 'Market Cap Weight', 'CAFO']]
+    df['wCAFO'] = df['Market Cap Weight'] * df['CAFO']
+    df['CAAFO'] = df.groupby('date')['wCAFO'].transform('sum')
+    df = df.groupby('date')['CAAFO'].first().reset_index()
+
     return df
 
-def calculate_market_cap_weight_industry(df, date_str):
+def calculate_CAAFO_industry(df, date_str):
     df = df.copy()
     date = datetime.strptime(date_str, '%Y-%m-%d')
     df['date'] = pd.to_datetime(df['date'])
@@ -42,9 +47,15 @@ def calculate_market_cap_weight_industry(df, date_str):
     weights = base_df.set_index(['Issue code', 'Industry'])['Market Cap Weight']
     df['Market Cap Weight'] = df.set_index(['Issue code', 'Industry']).index.map(weights)
 
+    df = df[['date', 'Industry', 'Market Cap Weight', 'CAFO']]
+    df['wCAFO'] = df['Market Cap Weight'] * df['CAFO']
+
+    df['CAAFO'] = df.groupby(['Industry','date'])['wCAFO'].transform('sum')
+    df = df.groupby(['Industry', 'date'])['CAAFO'].first().reset_index()    
+    print(df)
     return df
 
-def calculate_market_cap_weight_KOSPI200(df, const, date_str):
+def calculate_CAAFO_KOSPI200(df, const, date_str):
     df = df.copy()
     date = datetime.strptime(date_str, '%Y-%m-%d')
     df['date'] = pd.to_datetime(df['date'])
@@ -56,6 +67,11 @@ def calculate_market_cap_weight_KOSPI200(df, const, date_str):
     weights = base_df.set_index('Issue code')['Market Cap Weight']
     df_kospi200['Market Cap Weight'] = df_kospi200['Issue code'].map(weights)
 
+    df_kospi200 = df_kospi200[['date', 'Market Cap Weight', 'CAFO']]
+    df_kospi200['wCAFO'] = df_kospi200['Market Cap Weight'] * df_kospi200['CAFO']
+    df_kospi200['CAAFO'] = df_kospi200.groupby('date')['wCAFO'].transform('sum')
+    df_kospi200 = df_kospi200.groupby('date')['CAAFO'].first().reset_index()
+
     return df_kospi200
 
 def policy_change_analysis(conn, date_str, event_1, event_2, est_1, est_2, const):
@@ -65,33 +81,39 @@ def policy_change_analysis(conn, date_str, event_1, event_2, est_1, est_2, const
 
     query1 = f'SELECT "date", "Issue name", "Close", "Issue code", "No. of listed shares", "No. of shares of foreign ownership", "Foreign ownership ratio", "Foreign ownership limit quantity", "Exhaustion rate", "Industry" FROM foreign_ownership WHERE "date" <= "{event_after}" AND "date" >= "{event_before}" AND not("Industry" is NULL)'
     df_main = pd.read_sql_query(query1, conn)
-    df_main["Close"] = df_main["Close"].str.replace(',','').astype(float)
-    df_main["No. of listed shares"] = df_main["No. of listed shares"].str.replace(',','').astype(int)
-    df_main["Exhaustion rate"] = df_main["Exhaustion rate"].astype(float)
-    df_main["Daily change (ER)"] = df_main.groupby('Issue code')['Exhaustion rate'].diff().fillna(0)
+    df_main['Close'] = df_main['Close'].str.replace(',','').astype(float)
+    df_main['No. of listed shares'] = df_main['No. of listed shares'].str.replace(',','').astype(int)
+    df_main['Exhaustion rate'] = df_main['Exhaustion rate'].astype(float)
+    df_main['Daily change (ER)'] = df_main.groupby('Issue code')['Exhaustion rate'].diff().fillna(0)
 
     est_before = calculate_date(date_str, est_2)
     est_after = calculate_date(date_str, est_1)
     query2 = f'SELECT "date", "Issue name", "Close", "Issue code", "No. of listed shares", "No. of shares of foreign ownership", "Foreign ownership ratio", "Foreign ownership limit quantity", "Exhaustion rate", "Industry" FROM foreign_ownership WHERE "date" <= "{est_after}" AND "date" >= "{est_before}" AND not("Industry" is NULL)'
     df_est = pd.read_sql_query(query2, conn)
-    df_est["Exhaustion rate"] = df_est["Exhaustion rate"].astype(float)
-    df_est["Close"] = df_est["Close"].str.replace(',','').astype(float)
-    df_est["No. of listed shares"] = df_est["No. of listed shares"].str.replace(',','').astype(int)
-    df_est["Daily change (ER)"] = df_est.groupby('Issue code')['Exhaustion rate'].diff().fillna(0)
+    df_est['Exhaustion rate'] = df_est['Exhaustion rate'].astype(float)
+    df_est['Close'] = df_est['Close'].str.replace(',','').astype(float)
+    df_est['No. of listed shares'] = df_est['No. of listed shares'].str.replace(',','').astype(int)
+    df_est['Daily change (ER)'] = df_est.groupby('Issue code')['Exhaustion rate'].diff().fillna(0)
 
-    EstChangePerIssueCode = df_est.groupby('Issue code')["Daily change (ER)"].mean()
+    EstChangePerIssueCode = df_est.groupby('Issue code')['Daily change (ER)'].mean()
     df_main['Est. daily change'] = df_main['Issue code'].map(EstChangePerIssueCode)
     # print(df_main[df_main['Issue code'] == '005930'][['date', 'Exhaustion rate', 'Daily change (ER)', 'Est. daily change']])
+    
+    df_main['date'] = pd.to_datetime(df_main['date'])
+    df_main = df_main[df_main['date'] != pd.to_datetime(event_before)]
 
     # Head in the sand xD
     df_main = df_main.dropna(subset=['Est. daily change'])
     
-    
+    df_main['AFO'] = df_main['Daily change (ER)'] - df_main['Est. daily change']
 
-    # get market cap weights for each category (one of the later steps)
-    market = calculate_market_cap_weight(df_main, date_str)
-    industry = calculate_market_cap_weight_industry(df_main, date_str)
-    KOSPI200 = calculate_market_cap_weight_KOSPI200(df_main, const, date_str)
+    df_main['CAFO'] = df_main.groupby('Issue code')['AFO'].transform(lambda x: x.cumsum())
+
+    market = calculate_CAAFO_market(df_main, date_str)
+    industry = calculate_CAAFO_industry(df_main, date_str)
+    KOSPI200 = calculate_CAAFO_KOSPI200(df_main, const, date_str)
+
+
 
 
 # Add KOSPI200 constituents for each event date
