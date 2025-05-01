@@ -19,21 +19,43 @@ def calculate_date(date_str, days):
 
 def calculate_market_cap_weight(df, date_str):
     df = df.copy()
-    df['Market Cap'] = df['Close'] * df['No. of listed shares']
-    df['Market Cap Weight'] = df.groupby('date')['Market Cap'].transform(lambda x: x / x.sum())
+    date = datetime.strptime(date_str, '%Y-%m-%d')
+    df['date'] = pd.to_datetime(df['date'])
+
+    base_date_df = df[df['date'] == date].copy()
+    base_date_df['Market Cap'] = base_date_df['Close'] * base_date_df['No. of listed shares']
+    total_market_cap = base_date_df['Market Cap'].sum()
+    base_date_df['Market Cap Weight'] = base_date_df['Market Cap'] / total_market_cap
+    company_weights = base_date_df.set_index('Issue code')['Market Cap Weight']
+    df['Market Cap Weight'] = df['Issue code'].map(company_weights)
+
     return df
 
-def calculate_market_cap_weight_industry(df):
+def calculate_market_cap_weight_industry(df, date_str):
     df = df.copy()
-    df['Market Cap'] = df['Close'] * df['No. of listed shares']
-    df['Market Cap Weight'] = df.groupby(['date', 'Industry'])['Market Cap'].transform(lambda x: x / x.sum())
+    date = datetime.strptime(date_str, '%Y-%m-%d')
+    df['date'] = pd.to_datetime(df['date'])
+
+    base_df = df[df['date'] == date].copy()
+    base_df['Market Cap'] = base_df['Close'] * base_df['No. of listed shares']
+    base_df['Market Cap Weight'] = base_df.groupby('Industry')['Market Cap'].transform(lambda x: x / x.sum())
+    weights = base_df.set_index(['Issue code', 'Industry'])['Market Cap Weight']
+    df['Market Cap Weight'] = df.set_index(['Issue code', 'Industry']).index.map(weights)
+
     return df
 
-def calculate_market_cap_weight_KOSPI200(df, const):
+def calculate_market_cap_weight_KOSPI200(df, const, date_str):
     df = df.copy()
+    date = datetime.strptime(date_str, '%Y-%m-%d')
+    df['date'] = pd.to_datetime(df['date'])
     df_kospi200 = df[df['Issue code'].isin(const)].copy()
-    df_kospi200['Market Cap'] = df_kospi200['Close'] * df_kospi200['No. of listed shares']
-    df_kospi200['Market Cap Weight'] = df_kospi200.groupby('date')['Market Cap'].transform(lambda x: x / x.sum())
+    
+    base_df = df_kospi200[df_kospi200['date'] == date].copy()
+    base_df['Market Cap'] = base_df['Close'] * base_df['No. of listed shares']
+    base_df['Market Cap Weight'] = base_df['Market Cap'] / base_df['Market Cap'].sum()
+    weights = base_df.set_index('Issue code')['Market Cap Weight']
+    df_kospi200['Market Cap Weight'] = df_kospi200['Issue code'].map(weights)
+
     return df_kospi200
 
 def policy_change_analysis(conn, date_str, event_1, event_2, est_1, est_2, const):
@@ -61,12 +83,15 @@ def policy_change_analysis(conn, date_str, event_1, event_2, est_1, est_2, const
     df_main['Est. daily change'] = df_main['Issue code'].map(EstChangePerIssueCode)
     # print(df_main[df_main['Issue code'] == '005930'][['date', 'Exhaustion rate', 'Daily change (ER)', 'Est. daily change']])
 
-    # Hat in the sand xD
+    # Head in the sand xD
     df_main = df_main.dropna(subset=['Est. daily change'])
     
+    
+
+    # get market cap weights for each category (one of the later steps)
     market = calculate_market_cap_weight(df_main, date_str)
-    industry = calculate_market_cap_weight_industry(df_main)
-    KOSPI200 = calculate_market_cap_weight_KOSPI200(df_main, const)
+    industry = calculate_market_cap_weight_industry(df_main, date_str)
+    KOSPI200 = calculate_market_cap_weight_KOSPI200(df_main, const, date_str)
 
 
 # Add KOSPI200 constituents for each event date
