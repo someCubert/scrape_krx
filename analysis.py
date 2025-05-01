@@ -5,6 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from datetime import datetime, timedelta
+from scipy import stats
 
 db_path = 'foreign_ownership.db'
 conn = sqlite3.connect(db_path)
@@ -52,7 +53,7 @@ def calculate_CAAFO_industry(df, date_str):
 
     df['CAAFO'] = df.groupby(['Industry','date'])['wCAFO'].transform('sum')
     df = df.groupby(['Industry', 'date'])['CAAFO'].first().reset_index()    
-    print(df)
+
     return df
 
 def calculate_CAAFO_KOSPI200(df, const, date_str):
@@ -73,6 +74,7 @@ def calculate_CAAFO_KOSPI200(df, const, date_str):
     df_kospi200 = df_kospi200.groupby('date')['CAAFO'].first().reset_index()
 
     return df_kospi200
+ 
 
 def policy_change_analysis(conn, date_str, event_1, event_2, est_1, est_2, const):
     event_1 = event_1 - 1
@@ -112,7 +114,6 @@ def policy_change_analysis(conn, date_str, event_1, event_2, est_1, est_2, const
     market = calculate_CAAFO_market(df_main, date_str)
     industry = calculate_CAAFO_industry(df_main, date_str)
     KOSPI200 = calculate_CAAFO_KOSPI200(df_main, const, date_str)
-
 
 
 
