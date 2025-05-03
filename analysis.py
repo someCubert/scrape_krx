@@ -146,4 +146,7 @@ KOSPI200_const_forex = ['005930', '000660', '373220', '005380', '207940', '00027
 #test
 m_p1,i_p1,K_p1 = policy_change_analysis(conn, '2024-01-11', 0, 270, -30, -270, KOSPI200_const_forex)
 
+
+
+
 conn.close()
