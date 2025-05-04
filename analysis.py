@@ -75,16 +75,89 @@ def calculate_CAAFO_KOSPI200(df, const, date_str):
 
     return df_kospi200
  
+def generalized_sign_test(df_event, df_est, firm_codes):
+    df_est_filtered = df_est[df_est['Issue code'].isin(firm_codes)]
+    df_event_filtered = df_event[df_event['Issue code'].isin(firm_codes)]
 
-def policy_change_analysis(conn, date_str, event_1, event_2, est_1, est_2, const):
+    S_mean_per_firm = df_est_filtered.groupby('Issue code')['S'].mean()
+    p = S_mean_per_firm.mean()
+    n = len(S_mean_per_firm)
+
+    cafo_per_firm = df_event_filtered.groupby('Issue code')['CAFO'].last()
+    q = (cafo_per_firm > 0).sum()
+
+    npq = n * p * (1 - p)
+    if npq == 0:
+        Z = np.nan
+    else:
+        Z = (q - n * p) / np.sqrt(npq)
+
+    return p, q, n, Z
+
+def plot_CAAFO_over_time_variable_ranges(dfs, labels, event_dates, min_plot_day=-180, max_plot_day=270, title="CAAFO Around Event Dates"):
+    plt.figure(figsize=(14, 7))
+
+    all_min_days = []
+    all_max_days = []
+
+    for df, label, event_date_str in zip(dfs, labels, event_dates):
+        df_plot = df.copy()
+        event_date = pd.to_datetime(event_date_str)
+        df_plot['days_from_event'] = (pd.to_datetime(df_plot['date']) - event_date).dt.days
+        df_plot = df_plot.sort_values('days_from_event')
+
+        if not df_plot.empty:
+             all_min_days.append(df_plot['days_from_event'].min())
+             all_max_days.append(df_plot['days_from_event'].max())
+
+        df_plot = df_plot[(df_plot['days_from_event'] >= min_plot_day) &
+                          (df_plot['days_from_event'] <= max_plot_day)]
+
+        if not df_plot.empty:
+            start_day_value = df_plot.iloc[0]['CAAFO']
+            df_plot['CAAFO_adjusted_for_plot'] = df_plot['CAAFO'] - start_day_value
+            plt.plot(df_plot['days_from_event'], df_plot['CAAFO_adjusted_for_plot'], label=label, marker='.', linestyle='-', markersize=4)
+        else:
+             print(f"Warning: No data for '{label}' within the specified plot range [{min_plot_day}, {max_plot_day}].")
+
+    plt.axvline(x=0, color='black', linestyle='--', linewidth=1.5, label='Event Day (Day 0)')
+
+    plt.xlabel('Trading Days Relative to Event Date')
+    plt.ylabel(f'CAAFO (Normalized to 0 at Day {min_plot_day})') 
+    plt.title(title)
+
+    plt.xlim(min_plot_day, max_plot_day)
+
+    handles, legend_labels = plt.gca().get_legend_handles_labels()
+    by_label = dict(zip(legend_labels, handles))
+    plt.legend(by_label.values(), by_label.keys())
+
+    plt.grid(True, which='both', linestyle='--', linewidth=0.5)
+
+    plt.axhline(y=0, color='grey', linestyle=':', linewidth=1)
+
+    plt.tight_layout()
+    plt.show()
+
+    actual_min_plot = min(all_min_days) if all_min_days else min_plot_day
+    actual_max_plot = max(all_max_days) if all_max_days else max_plot_day
+    if actual_min_plot > min_plot_day:
+        print(f"Note: Some data series start after the requested min_plot_day ({min_plot_day}). Earliest data point shown is Day {actual_min_plot}.")
+    if actual_max_plot < max_plot_day:
+        print(f"Note: Some data series end before the requested max_plot_day ({max_plot_day}). Latest data point shown is Day {actual_max_plot}.")
+
+
+def policy_change_analysis(conn, date_str, event_1, event_2, est_1, est_2, const, name):
     event_1 = event_1 - 1
     event_before = calculate_date(date_str, event_1)
     event_after = calculate_date(date_str, event_2)
 
     query1 = f'SELECT "date", "Issue name", "Close", "Issue code", "No. of listed shares", "No. of shares of foreign ownership", "Foreign ownership ratio", "Foreign ownership limit quantity", "Exhaustion rate", "Industry" FROM foreign_ownership WHERE "date" <= "{event_after}" AND "date" >= "{event_before}" AND not("Industry" is NULL)'
     df_main = pd.read_sql_query(query1, conn)
-    df_main['Close'] = df_main['Close'].str.replace(',','').astype(float)
-    df_main['No. of listed shares'] = df_main['No. of listed shares'].str.replace(',','').astype(int)
+    df_main['Close'] = df_main['Close'].astype(str).str.replace(',','').astype(float)
+    df_main['No. of listed shares'] = df_main['No. of listed shares'].astype(str).str.replace(',','').astype(int)
+    df_main = df_main.dropna(subset=['Exhaustion rate']) # some old data apparently dont have foreign ownership values
+    df_main = df_main[df_main['Exhaustion rate'] != '']
     df_main['Exhaustion rate'] = df_main['Exhaustion rate'].astype(float)
     df_main = df_main.sort_values(['Issue code', 'date'])
     df_main['Daily change (ER)'] = df_main.groupby('Issue code')['Exhaustion rate'].diff().fillna(0)
@@ -94,15 +167,16 @@ def policy_change_analysis(conn, date_str, event_1, event_2, est_1, est_2, const
     est_after = calculate_date(date_str, est_1)
     query2 = f'SELECT "date", "Issue name", "Close", "Issue code", "No. of listed shares", "No. of shares of foreign ownership", "Foreign ownership ratio", "Foreign ownership limit quantity", "Exhaustion rate", "Industry" FROM foreign_ownership WHERE "date" <= "{est_after}" AND "date" >= "{est_before}" AND not("Industry" is NULL)'
     df_est = pd.read_sql_query(query2, conn)
+    df_est = df_est.dropna(subset=['Exhaustion rate'])
+    df_est = df_est[df_est['Exhaustion rate'] != '']
     df_est['Exhaustion rate'] = df_est['Exhaustion rate'].astype(float)
-    df_est['Close'] = df_est['Close'].str.replace(',','').astype(float)
-    df_est['No. of listed shares'] = df_est['No. of listed shares'].str.replace(',','').astype(int)
+    df_est['Close'] = df_est['Close'].astype(str).str.replace(',','').astype(float)
+    df_est['No. of listed shares'] = df_est['No. of listed shares'].astype(str).str.replace(',','').astype(int)
     df_est = df_est.sort_values(['Issue code', 'date'])
     df_est['Daily change (ER)'] = df_est.groupby('Issue code')['Exhaustion rate'].diff().fillna(0)
 
     df_est['date'] = pd.to_datetime(df_est['date'])
     df_est = df_est[df_est['date'] != pd.to_datetime(est_before)]   
-    print(df_est)
     EstChangePerIssueCode = df_est.groupby('Issue code')['Daily change (ER)'].mean()
     df_main['Est. daily change'] = df_main['Issue code'].map(EstChangePerIssueCode)
     # print(df_main[df_main['Issue code'] == '005930'][['date', 'Exhaustion rate', 'Daily change (ER)', 'Est. daily change']])
@@ -122,17 +196,50 @@ def policy_change_analysis(conn, date_str, event_1, event_2, est_1, est_2, const
     KOSPI200 = calculate_CAAFO_KOSPI200(df_main, const, date_str)
 
     # ttest, null hypothesis: mean = 0
+    print(f"\nt-test results for {name}:")
     hyp0 = 0
     t_stat_market, p_value_market = stats.ttest_1samp(market['CAAFO'], hyp0)
-    print(f"Market-Level, t-statistic: {t_stat_market}, p-value: {p_value_market}")
+    print(f"  [Market] t-statistic: {t_stat_market}, p-value: {p_value_market}")
     
     for i in industry['Industry'].unique():
         industry_subset = industry[industry['Industry'] == i]
         t_stat_industry, p_value_industry = stats.ttest_1samp(industry_subset['CAAFO'], hyp0)
-        print(f"Industry: {i}, t-statistic: {t_stat_industry}, p-value: {p_value_industry}")
+        print(f"  [Industry: {i}] t-statistic: {t_stat_industry}, p-value: {p_value_industry}")
 
     t_stat_KOSPI, p_value_KOSPI = stats.ttest_1samp(KOSPI200['CAAFO'], hyp0)
-    print(f"KOSPI-Level, t-statistic: {t_stat_KOSPI}, p-value: {p_value_KOSPI}")
+    print(f"  [KOSPI200] t-statistic: {t_stat_KOSPI}, p-value: {p_value_KOSPI}")
+
+
+    # generalized sign test
+    df_est['Est. daily change'] = df_est['Issue code'].map(EstChangePerIssueCode)
+    df_est['AFO'] = df_est['Daily change (ER)'] - df_est['Est. daily change']
+    df_est['S'] = (df_est['AFO'] > 0).astype(int)
+
+    print(f"\nGeneralized Sign Test Results for {name}:")
+
+    all_firms = df_main['Issue code'].unique()
+    p_m, q_m, n_m, Z_m = generalized_sign_test(df_main, df_est, all_firms)
+    print(f"  [Market] p = {p_m:.4f}, q = {q_m}, n = {n_m}, Z = {Z_m:.4f}")
+
+    kospi200_firms = df_main[df_main['Issue code'].isin(const)]['Issue code'].unique()
+    p_k, q_k, n_k, Z_k = generalized_sign_test(df_main, df_est, kospi200_firms)
+    print(f"  [KOSPI200] p = {p_k:.4f}, q = {q_k}, n = {n_k}, Z = {Z_k:.4f}")
+
+    for industry_name in df_main['Industry'].dropna().unique():
+        industry_firms = df_main[df_main['Industry'] == industry_name]['Issue code'].unique()
+        p_i, q_i, n_i, Z_i = generalized_sign_test(df_main, df_est, industry_firms)
+        print(f"  [Industry: {industry_name}] p = {p_i:.4f}, q = {q_i}, n = {n_i}, Z = {Z_i:.4f}")
+
+    # for graphs
+    df_combined = pd.concat([df_est, df_main], ignore_index=True)
+    df_combined['date'] = pd.to_datetime(df_combined['date'])
+    df_combined = df_combined.sort_values(['Issue code', 'date'])
+
+    df_combined['AFO'] = df_combined['Daily change (ER)'] - df_combined['Est. daily change']
+    df_combined['CAFO'] = df_combined.groupby('Issue code')['AFO'].cumsum()
+    market = calculate_CAAFO_market(df_combined, date_str)
+    industry = calculate_CAAFO_industry(df_combined, date_str)
+    KOSPI200 = calculate_CAAFO_KOSPI200(df_combined, const, date_str)
 
     return market, industry, KOSPI200
 
@@ -144,15 +251,28 @@ KOSPI200_const_LEIs = ['005930', '000660', '373220', '207940', '005380', '005490
 KOSPI200_const_forex = ['005930', '000660', '373220', '005380', '207940', '000270', '068270', '105560', '005490', '035420', '006400', '051910', '028260', '055550', '012330', '003670', '035720', '066570', '000810', '086790', '032830', '042700', '138040', '011200', '329180', '402340', '259960', '003550', '034020', '015760', '012450', '018260', '009150', '033780', '034730', '009540', '047050', '096770', '017670', '024110', '316140', '010130', '267260', '323410', '090430', '042660', '030200', '086280', '003490', '010140', '352820', '010950', '005830', '000100', '450080', '011070', '011790', '326030', '010120', '034220', '022100', '267250', '051900', '161390', '097950', '241560', '454910', '066970', '047810', '036460', '079550', '021240', '005070', '011170', '001570', '251270', '028050', '009830', '003230', '029780', '064350', '032640', '078930', '006800', '302440', '006260', '180640', '036570', '011780', '005940', '071050', '010620', '004020', '377300', '128940', '016360', '272210', '000720', '271560', '001040', '000150', '039490', '361610', '035250', '001450', '001440', '004370', '175330', '052690', '088350', '138930', '018880', '002790', '004990', '002380', '081660', '383220', '192820', '000120', '007070', '030000', '012750', '028670', '008930', '112610', '204320', '000880', '026960', '008770', '014680', '005850', '073240', '103140', '023530', '009420', '010060', '282330', '042670', '047040', '051600', '111770', '139480', '161890', '017800', '298020', '298050', '004170', '007310', '011210', '280360', '000080', '000240', '002710', '004490', '006280', '006360', '009240', '139130', '336260', '457190', '009970', '014820', '069620', '069960', '001120', '375500', '137310', '145720', '185750', '000210', '004000', '004800', '005300', '006110', '005420', '003620', '003090', '001800', '001740', '001680', '300720', '192080', '120110', '039130', '008730', '032350', '006650', '093370', '105630', '114090', '271940', '009900', '003030', '178920', '001430', '069260', '285130', '016380', '000670', '005250']
 
 #test
-m_p1,i_p1,K_p1 = policy_change_analysis(conn, '2024-01-11', 0, 270, -30, -270, KOSPI200_const_forex)
+# m_p1,i_p1,K_p1 = policy_change_analysis(conn, '2020-07-06', 0, 270, -30, -270, KOSPI200_const_forex, 'test')
 
 #real
-# m_pFSCMA,i_pFSCMA,K_pFSCMA = policy_change_analysis(conn, '2009-02-04', 0, 270, -1, -180, KOSPI200_const_FSCMA)
-# m_pShort1,i_pShort1,K_pShort1 = policy_change_analysis(conn, '2020-03-13', 0, 180, -1, -180, KOSPI200_const_short1)
-# m_pShort2,i_pShort2,K_pShort2 = policy_change_analysis(conn, '2023-11-06', 0, 180, -1, -190, KOSPI200_const_short2)
-# m_pLEIs,i_pLEIs,K_pLEIs = policy_change_analysis(conn, '2023-12-14', 0, 270, -1, -180, KOSPI200_const_LEIs)
-# m_pForexW, i_pForexW,K_pForexW = policy_change_analysis(conn, '2024-07-01', 0, 270, -181, -360, KOSPI200_const_forex)
-# m_pForex,i_pForex,K_pForex = policy_change_analysis(conn, '2024-07-01', 0, 270, -1, -180, KOSPI200_const_forex)
+m_pFSCMA,i_pFSCMA,K_pFSCMA = policy_change_analysis(conn, '2009-02-04', 0, 270, -1, -180, KOSPI200_const_FSCMA, 'FSCMA')
+m_pShort1,i_pShort1,K_pShort1 = policy_change_analysis(conn, '2020-03-13', 0, 180, -1, -180, KOSPI200_const_short1, 'Short1')
+m_pShort2,i_pShort2,K_pShort2 = policy_change_analysis(conn, '2023-11-06', 0, 180, -1, -180, KOSPI200_const_short2, 'Short2')
+m_pLEIs,i_pLEIs,K_pLEIs = policy_change_analysis(conn, '2023-12-14', 0, 270, -1, -180, KOSPI200_const_LEIs, 'LEIs')
+m_pForexW, i_pForexW,K_pForexW = policy_change_analysis(conn, '2024-07-01', 0, 270, -181, -360, KOSPI200_const_forex, 'ForexWithPilot')
+m_pForex,i_pForex,K_pForex = policy_change_analysis(conn, '2024-07-01', 0, 270, -1, -180, KOSPI200_const_forex, 'Forex')
 
+
+#graphs
+plot_start_day = -180
+plot_end_day = 270
+
+plot_CAAFO_over_time_variable_ranges(
+    dfs=[m_pFSCMA, m_pShort1, m_pShort2, m_pLEIs, m_pForexW, m_pForex],
+    labels=['FSCMA (2009)', 'Short Ban 1 (2020)', 'Short Ban 2 (2023)', 'LEIs (2023)', 'Forex With Pilot (2024)', 'Forex without Pilot (2024)'],
+    event_dates=['2009-02-04', '2020-03-13', '2023-11-06', '2023-12-14', '2024-07-01', '2024-07-01'],
+    min_plot_day=plot_start_day,
+    max_plot_day=plot_end_day,   
+    title=f'Market-Level CAAFO Surrounding Policy Changes ({plot_start_day} to {plot_end_day} Days)'
+)
 
 conn.close()
