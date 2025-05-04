@@ -94,7 +94,7 @@ def generalized_sign_test(df_event, df_est, firm_codes):
 
     return p, q, n, Z
 
-def plot_CAAFO_over_time_variable_ranges(dfs, labels, event_dates, min_plot_day=-180, max_plot_day=270, title="CAAFO Around Event Dates"):
+def plot_CAAFO_over_time_variable_ranges(dfs, labels, event_dates, min_plot_day=-180, max_plot_day=270):
     plt.figure(figsize=(14, 7))
 
     all_min_days = []
@@ -124,7 +124,6 @@ def plot_CAAFO_over_time_variable_ranges(dfs, labels, event_dates, min_plot_day=
 
     plt.xlabel('Trading Days Relative to Event Date')
     plt.ylabel(f'CAAFO (Normalized to 0 at Day {min_plot_day})') 
-    plt.title(title)
 
     plt.xlim(min_plot_day, max_plot_day)
 
@@ -271,8 +270,7 @@ plot_CAAFO_over_time_variable_ranges(
     labels=['FSCMA (2009)', 'Short Ban 1 (2020)', 'Short Ban 2 (2023)', 'LEIs (2023)', 'Forex With Pilot (2024)', 'Forex without Pilot (2024)'],
     event_dates=['2009-02-04', '2020-03-13', '2023-11-06', '2023-12-14', '2024-07-01', '2024-07-01'],
     min_plot_day=plot_start_day,
-    max_plot_day=plot_end_day,   
-    title=f'Market-Level CAAFO Surrounding Policy Changes ({plot_start_day} to {plot_end_day} Days)'
+    max_plot_day=plot_end_day
 )
 
 conn.close()
