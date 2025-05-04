@@ -146,7 +146,13 @@ KOSPI200_const_forex = ['005930', '000660', '373220', '005380', '207940', '00027
 #test
 m_p1,i_p1,K_p1 = policy_change_analysis(conn, '2024-01-11', 0, 270, -30, -270, KOSPI200_const_forex)
 
-
+#real
+# m_pFSCMA,i_pFSCMA,K_pFSCMA = policy_change_analysis(conn, '2009-02-04', 0, 270, -1, -180, KOSPI200_const_FSCMA)
+# m_pShort1,i_pShort1,K_pShort1 = policy_change_analysis(conn, '2020-03-13', 0, 180, -1, -180, KOSPI200_const_short1)
+# m_pShort2,i_pShort2,K_pShort2 = policy_change_analysis(conn, '2023-11-06', 0, 180, -1, -190, KOSPI200_const_short2)
+# m_pLEIs,i_pLEIs,K_pLEIs = policy_change_analysis(conn, '2023-12-14', 0, 270, -1, -180, KOSPI200_const_LEIs)
+# m_pForexW, i_pForexW,K_pForexW = policy_change_analysis(conn, '2024-07-01', 0, 270, -181, -360, KOSPI200_const_forex)
+# m_pForex,i_pForex,K_pForex = policy_change_analysis(conn, '2024-07-01', 0, 270, -1, -180, KOSPI200_const_forex)
 
 
 conn.close()
