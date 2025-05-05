@@ -154,7 +154,7 @@ def plot_CAAFO_over_time_variable_ranges(file_name, dfs, labels, event_dates, mi
     if actual_max_plot < max_plot_day:
         print(f"Note: Some data series end before the requested max_plot_day ({max_plot_day}). Latest data point shown is Day {actual_max_plot}.")
 
-def plot_CAFO_by_industry_over_time_normalized(df_industry, event_date_str, file_name='CAFO_by_industry_over_time_normalized'):
+def plot_CAFO_by_industry_over_time_normalized(file_name, df_industry, event_date_str):
     event_date = pd.to_datetime(event_date_str)
     df_plot = df_industry.copy()
     df_plot['date'] = pd.to_datetime(df_plot['date'])
@@ -184,6 +184,7 @@ def plot_CAFO_by_industry_over_time_normalized(df_industry, event_date_str, file
     plt.xlabel('Days Relative to Event Date')
     plt.ylabel('CAFO (Normalized to 0 at Event Date)')
     plt.legend(title='Industry', bbox_to_anchor=(1, .6), loc='center left')
+    plt.tight_layout()
     plt.grid(True)
 
     os.makedirs('plots', exist_ok=True)
@@ -234,8 +235,8 @@ def policy_change_analysis(conn, date_str, event_1, event_2, est_1, est_2, const
     df_main['CAFO'] = df_main.groupby('Issue code')['AFO'].transform(lambda x: x.cumsum())
 
     market = calculate_CAAFO_market(df_main, date_str)
-    industry = calculate_CAAFO_industry(df_main, date_str)
     KOSPI200 = calculate_CAAFO_KOSPI200(df_main, const, date_str)
+    industry = calculate_CAAFO_industry(df_main, date_str)
 
     # ttest, null hypothesis: mean = 0
     print(f"\nt-test results for {name}:")
@@ -267,9 +268,13 @@ def policy_change_analysis(conn, date_str, event_1, event_2, est_1, est_2, const
     p_k, q_k, n_k, Z_k = generalized_sign_test(df_main, df_est, kospi200_firms)
     print(f"  [KOSPI200] p = {p_k:.4f}, q = {q_k}, n = {n_k}, Z = {Z_k:.4f}")
 
-    for industry_name in df_main['Industry'].dropna().unique():
-        industry_firms = df_main[df_main['Industry'] == industry_name]['Issue code'].unique()
-        p_i, q_i, n_i, Z_i = generalized_sign_test(df_main, df_est, industry_firms)
+    df_industry = df_main.copy()
+    date = datetime.strptime(date_str, '%Y-%m-%d')
+    industry_mapping = df_industry[df_industry['date'] == date][['Issue code', 'Industry']].drop_duplicates().set_index('Issue code')['Industry']
+    df_industry['Industry'] = df_industry['Issue code'].map(industry_mapping)
+    for industry_name in df_industry['Industry'].dropna().unique():
+        industry_firms = df_industry[df_industry['Industry'] == industry_name]['Issue code'].unique()
+        p_i, q_i, n_i, Z_i = generalized_sign_test(df_industry, df_est, industry_firms)
         print(f"  [Industry: {industry_name}] p = {p_i:.4f}, q = {q_i}, n = {n_i}, Z = {Z_i:.4f}")
 
     # for graphs
@@ -327,6 +332,13 @@ plot_CAAFO_over_time_variable_ranges(
     max_plot_day=plot_end_day
 )
 
-plot_CAFO_by_industry_over_time_normalized(i_pFSCMA, event_date_str='2009-02-04')
+
+plot_CAFO_by_industry_over_time_normalized('CAAFO_FSCMA', i_pFSCMA, event_date_str='2009-02-04')
+plot_CAFO_by_industry_over_time_normalized('CAAFO_Short1', i_pShort1, event_date_str='2020-03-13')
+plot_CAFO_by_industry_over_time_normalized('CAAFO_Short2', i_pShort2, event_date_str='2023-11-06')
+plot_CAFO_by_industry_over_time_normalized('CAAFO_LEIs', i_pLEIs, event_date_str='2023-12-14')
+plot_CAFO_by_industry_over_time_normalized('CAAFO_ForexW', i_pForexW, event_date_str='2024-07-01')
+plot_CAFO_by_industry_over_time_normalized('CAAFO_Forex', i_pForex, event_date_str='2024-07-01')
+
 
 conn.close()
