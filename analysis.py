@@ -183,7 +183,7 @@ def plot_CAFO_by_industry_over_time_normalized(file_name, df_industry, event_dat
     plt.axvline(x=0, color='black', linestyle='--', linewidth=1.2, label='Event Date (Day 0)')
     plt.xlabel('Days Relative to Event Date')
     plt.ylabel('CAFO (Normalized to 0 at Event Date)')
-    plt.legend(title='Industry', bbox_to_anchor=(1, .6), loc='center left')
+    plt.legend(title='Industry', bbox_to_anchor=(1, .5), loc='center left')
     plt.tight_layout()
     plt.grid(True)
 
