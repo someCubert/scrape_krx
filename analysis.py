@@ -44,9 +44,18 @@ def calculate_CAAFO_industry(df, date_str):
 
     base_df = df[df['date'] == date].copy()
     base_df['Market Cap'] = base_df['Close'] * base_df['No. of listed shares']
-    base_df['Market Cap Weight'] = base_df.groupby('Industry')['Market Cap'].transform(lambda x: x / x.sum())
-    weights = base_df.set_index(['Issue code', 'Industry'])['Market Cap Weight']
-    df['Market Cap Weight'] = df.set_index(['Issue code', 'Industry']).index.map(weights)
+    base_df = base_df.reset_index(drop=True)
+
+    base_df['Market Cap Weight'] = base_df.groupby('Industry')['Market Cap'].transform(
+        lambda x: x / x.sum()
+    )
+
+    weights_df = base_df[['Issue code', 'Market Cap Weight']].drop_duplicates()
+
+    df = df.merge(weights_df, on=['Issue code'], how='inner')
+
+    industry_mapping = df[df['date'] == date][['Issue code', 'Industry']].drop_duplicates().set_index('Issue code')['Industry']
+    df['Industry'] = df['Issue code'].map(industry_mapping)
 
     df = df[['date', 'Industry', 'Market Cap Weight', 'CAFO']]
     df['wCAFO'] = df['Market Cap Weight'] * df['CAFO']
@@ -95,7 +104,7 @@ def generalized_sign_test(df_event, df_est, firm_codes):
     return p, q, n, Z
 
 def plot_CAAFO_over_time_variable_ranges(file_name, dfs, labels, event_dates, min_plot_day=-180, max_plot_day=270):
-    plt.figure(figsize=(14, 7))
+    plt.figure(figsize=(12, 6))
 
     all_min_days = []
     all_max_days = []
@@ -135,8 +144,9 @@ def plot_CAAFO_over_time_variable_ranges(file_name, dfs, labels, event_dates, mi
 
     plt.axhline(y=0, color='grey', linestyle=':', linewidth=1)
     os.makedirs('plots', exist_ok=True)  # Create 'plots' subfolder if it doesn't exist
-    plt.savefig(f'plots/{file_name}.png', dpi=300, bbox_inches='tight')
-    plt.close()
+    # plt.savefig(f'plots/{file_name}.png', dpi=300, bbox_inches='tight')
+    plt.show()
+    # plt.close()
 
     actual_min_plot = min(all_min_days) if all_min_days else min_plot_day
     actual_max_plot = max(all_max_days) if all_max_days else max_plot_day
@@ -185,9 +195,8 @@ def policy_change_analysis(conn, date_str, event_1, event_2, est_1, est_2, const
 
     # Head in the sand xD
     df_main = df_main.dropna(subset=['Est. daily change'])
-    
-    df_main['AFO'] = df_main['Daily change (ER)'] - df_main['Est. daily change']
 
+    df_main['AFO'] = df_main['Daily change (ER)'] - df_main['Est. daily change']
     df_main['CAFO'] = df_main.groupby('Issue code')['AFO'].transform(lambda x: x.cumsum())
 
     market = calculate_CAAFO_market(df_main, date_str)
@@ -259,6 +268,7 @@ m_pShort2,i_pShort2,K_pShort2 = policy_change_analysis(conn, '2023-11-06', 0, 18
 m_pLEIs,i_pLEIs,K_pLEIs = policy_change_analysis(conn, '2023-12-14', 0, 270, -1, -180, KOSPI200_const_LEIs, 'LEIs')
 m_pForexW, i_pForexW,K_pForexW = policy_change_analysis(conn, '2024-07-01', 0, 270, -181, -360, KOSPI200_const_forex, 'ForexWithPilot')
 m_pForex,i_pForex,K_pForex = policy_change_analysis(conn, '2024-07-01', 0, 270, -1, -180, KOSPI200_const_forex, 'Forex')
+
 
 
 #graphs

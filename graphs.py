@@ -10,9 +10,9 @@ import matplotlib.ticker as ticker
 df = pd.DataFrame(columns= ['Year','GDP Growth Rate'])
 years = range(2005, 2024)
 df['Year'] = years
-df['GDP growth rate'] = [4.31, 5.26, 5.80, 3.01, 0.79, 6.80, 3.69, 2.40, 3.16, 3.20, 2.81, 2.95, 3.16, 2.91, 2.24, -0.71, 4.30, 2.61, 1.36]
+df['GDP growth rate (%)'] = [4.31, 5.26, 5.80, 3.01, 0.79, 6.80, 3.69, 2.40, 3.16, 3.20, 2.81, 2.95, 3.16, 2.91, 2.24, -0.71, 4.30, 2.61, 1.36]
 
-plt.figure(figsize=(14, 7))
+plt.figure(figsize=(12, 6))
 sns.lineplot(data=df, x='Year', y='GDP growth rate (%)')
 plt.grid(True)
 plt.xticks(years)
@@ -33,7 +33,7 @@ korea_df = pd.DataFrame({'Year': years, 'Foreign Ownership Level (%)': korea_dat
 
 # df = pd.concat([korea_df, japan_df], ignore_index=True)
 
-plt.figure(figsize=(14, 7))
+plt.figure(figsize=(12, 6))
 sns.lineplot(data=korea_df, x='Year', y='Foreign Ownership Level (%)')
 plt.grid(True)
 plt.xticks(years)
@@ -65,7 +65,7 @@ df_main = df_main.sort_values("date")
 last_per_stock_per_year = df_main.groupby(["year", "Issue code"]).tail(1)
 total_market_cap_per_year = last_per_stock_per_year.groupby("year")["market_cap"].sum().reset_index()
 
-plt.figure(figsize=(14, 7))
+plt.figure(figsize=(12, 6))
 sns.lineplot(data=total_market_cap_per_year, x="year", y="market_cap")
 # Change divisor to 1e9 for billions or 1e12 for trillions
 divisor = 1e12
