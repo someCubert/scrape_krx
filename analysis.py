@@ -6,6 +6,9 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from datetime import datetime, timedelta
 from scipy import stats
+from scipy.stats import norm
+from statsmodels.stats.diagnostic import acorr_ljungbox
+from arch.bootstrap import MovingBlockBootstrap
 
 db_path = 'foreign_ownership.db'
 conn = sqlite3.connect(db_path)
@@ -96,12 +99,14 @@ def generalized_sign_test(df_event, df_est, firm_codes):
     q = (cafo_per_firm > 0).sum()
 
     npq = n * p * (1 - p)
-    if npq == 0:
+    if npq <= 0:
         Z = np.nan
+        p_value = np.nan 
     else:
         Z = (q - n * p) / np.sqrt(npq)
+        p_value = 2 * norm.sf(np.abs(Z)) 
 
-    return p, q, n, Z
+    return p, q, n, Z, p_value
 
 def plot_CAAFO_over_time_variable_ranges(file_name, dfs, labels, event_dates, min_plot_day=-180, max_plot_day=270):
     plt.figure(figsize=(12, 6))
@@ -191,11 +196,28 @@ def plot_CAFO_by_industry_over_time_normalized(file_name, df_industry, event_dat
     plt.savefig(f'plots/{file_name}.png', dpi=300)
     plt.close()
 
+def run_ljung_box(data_series, lags_to_test=10):
+    n_obs = len(data_series)
+    actual_lags = min(lags_to_test, n_obs - 1)
+
+    if actual_lags < 1:
+        return None, 0
+
+    try:
+        lb_results = acorr_ljungbox(data_series['CAAFO'], lags=actual_lags, return_df=True)
+
+        p_value = lb_results['lb_pvalue'].iloc[-1]
+        return p_value, actual_lags
+    except Exception as e:
+        print(f"Error running Ljung-Box test: {e}")
+        return None, actual_lags 
+
 def policy_change_analysis(conn, date_str, event_1, event_2, est_1, est_2, const, name):
     event_1 = event_1 - 1
     event_before = calculate_date(date_str, event_1)
     event_after = calculate_date(date_str, event_2)
 
+    # prepare data
     query1 = f'SELECT "date", "Issue name", "Close", "Issue code", "No. of listed shares", "No. of shares of foreign ownership", "Foreign ownership ratio", "Foreign ownership limit quantity", "Exhaustion rate", "Industry" FROM foreign_ownership WHERE "date" <= "{event_after}" AND "date" >= "{event_before}" AND not("Industry" is NULL)'
     df_main = pd.read_sql_query(query1, conn)
     df_main['Close'] = df_main['Close'].astype(str).str.replace(',','').astype(float)
@@ -238,20 +260,46 @@ def policy_change_analysis(conn, date_str, event_1, event_2, est_1, est_2, const
     KOSPI200 = calculate_CAAFO_KOSPI200(df_main, const, date_str)
     industry = calculate_CAAFO_industry(df_main, date_str)
 
+    # autocorrelation test
+    num_lags_lb = 10
+    lb_pvalue_market, lags_used_market = run_ljung_box(market, lags_to_test=num_lags_lb)
+    if lb_pvalue_market is not None:
+        print(f"\nLjung-Box test (up to {lags_used_market} lags) p-value: {lb_pvalue_market:.4g}", end="")
+        if lb_pvalue_market < 0.05:
+            print(" (Suggests significant autocorrelation)")
+        else:
+            print(" (Suggests no significant autocorrelation)")
+    else:
+        print(f"  Ljung-Box test could not be run (N={len(market)}).")
+
     # ttest, null hypothesis: mean = 0
     print(f"\nt-test results for {name}:")
     hyp0 = 0
-    t_stat_market, p_value_market = stats.ttest_1samp(market['CAAFO'], hyp0)
-    print(f"  [Market] t-statistic: {t_stat_market}, p-value: {p_value_market}")
-    
+    ttest_result_market = stats.ttest_1samp(market['CAAFO'], hyp0)
+    conf_interval_market = ttest_result_market.confidence_interval()
+    ci_low_market = conf_interval_market.low
+    ci_high_market = conf_interval_market.high
+    sample_mean = market['CAAFO'].mean()
+    cohens_d_market = sample_mean / market['CAAFO'].std()
+    print(f"  [Market] t-statistic: {ttest_result_market.statistic}, p-value: {ttest_result_market.pvalue}, df: {ttest_result_market.df}, Mean: {sample_mean:.4f}, Confidence Interval (95%): ({ci_low_market:.4f}, {ci_high_market:.4f}), Cohen's d: {cohens_d_market:.4f}")
+
     for i in industry['Industry'].unique():
         industry_subset = industry[industry['Industry'] == i]
-        t_stat_industry, p_value_industry = stats.ttest_1samp(industry_subset['CAAFO'], hyp0)
-        print(f"  [Industry: {i}] t-statistic: {t_stat_industry}, p-value: {p_value_industry}")
+        ttest_result_industry = stats.ttest_1samp(industry_subset['CAAFO'], hyp0)
+        conf_interval_industry = ttest_result_industry.confidence_interval()
+        ci_low_industry = conf_interval_industry.low
+        ci_high_industry = conf_interval_industry.high
+        sample_mean_industry = industry_subset['CAAFO'].mean()
+        cohens_d_industry = sample_mean_industry / industry_subset['CAAFO'].std()
+        print(f"  [Industry: {i}] t-statistic: {ttest_result_industry.statistic}, p-value: {ttest_result_industry.pvalue}, df: {ttest_result_industry.df}, Mean: {sample_mean_industry:.4f}, Confidence Interval (95%): ({ci_low_industry:.4f}, {ci_high_industry:.4f}), Cohen's d: {cohens_d_industry:.4f}")
 
-    t_stat_KOSPI, p_value_KOSPI = stats.ttest_1samp(KOSPI200['CAAFO'], hyp0)
-    print(f"  [KOSPI200] t-statistic: {t_stat_KOSPI}, p-value: {p_value_KOSPI}")
-
+    ttest_result_KOSPI = stats.ttest_1samp(KOSPI200['CAAFO'], hyp0)
+    conf_interval_KOSPI = ttest_result_KOSPI.confidence_interval() 
+    ci_low_KOSPI = conf_interval_KOSPI.low
+    ci_high_KOSPI = conf_interval_KOSPI.high
+    sample_mean_KOSPI = KOSPI200['CAAFO'].mean()
+    cohens_d_KOSPI = sample_mean_KOSPI / KOSPI200['CAAFO'].std()
+    print(f"  [KOSPI200] t-statistic: {ttest_result_KOSPI.statistic}, p-value: {ttest_result_KOSPI.pvalue}, df: {ttest_result_KOSPI.df}, Mean: {sample_mean_KOSPI:.4f}, Confidence Interval (95%): ({ci_low_KOSPI:.4f}, {ci_high_KOSPI:.4f}), Cohen's d: {cohens_d_KOSPI:.4f}")
 
     # generalized sign test
     df_est['Est. daily change'] = df_est['Issue code'].map(EstChangePerIssueCode)
@@ -261,12 +309,12 @@ def policy_change_analysis(conn, date_str, event_1, event_2, est_1, est_2, const
     print(f"\nGeneralized Sign Test Results for {name}:")
 
     all_firms = df_main['Issue code'].unique()
-    p_m, q_m, n_m, Z_m = generalized_sign_test(df_main, df_est, all_firms)
-    print(f"  [Market] p = {p_m:.4f}, q = {q_m}, n = {n_m}, Z = {Z_m:.4f}")
+    p_m, q_m, n_m, Z_m, p_value_m = generalized_sign_test(df_main, df_est, all_firms)
+    print(f"  [Market] p = {p_m:.4f}, q = {q_m}, n = {n_m}, Z = {Z_m:.4f}, p-value = {p_value_m}")
 
     kospi200_firms = df_main[df_main['Issue code'].isin(const)]['Issue code'].unique()
-    p_k, q_k, n_k, Z_k = generalized_sign_test(df_main, df_est, kospi200_firms)
-    print(f"  [KOSPI200] p = {p_k:.4f}, q = {q_k}, n = {n_k}, Z = {Z_k:.4f}")
+    p_k, q_k, n_k, Z_k, p_value_k = generalized_sign_test(df_main, df_est, kospi200_firms)
+    print(f"  [KOSPI200] p = {p_k:.4f}, q = {q_k}, n = {n_k}, Z = {Z_k:.4f}, p-value = {p_value_k}")
 
     df_industry = df_main.copy()
     date = datetime.strptime(date_str, '%Y-%m-%d')
@@ -274,8 +322,8 @@ def policy_change_analysis(conn, date_str, event_1, event_2, est_1, est_2, const
     df_industry['Industry'] = df_industry['Issue code'].map(industry_mapping)
     for industry_name in df_industry['Industry'].dropna().unique():
         industry_firms = df_industry[df_industry['Industry'] == industry_name]['Issue code'].unique()
-        p_i, q_i, n_i, Z_i = generalized_sign_test(df_industry, df_est, industry_firms)
-        print(f"  [Industry: {industry_name}] p = {p_i:.4f}, q = {q_i}, n = {n_i}, Z = {Z_i:.4f}")
+        p_i, q_i, n_i, Z_i, p_value_i = generalized_sign_test(df_industry, df_est, industry_firms)
+        print(f"  [Industry: {industry_name}] p = {p_i:.4f}, q = {q_i}, n = {n_i}, Z = {Z_i:.4f}, p-value = {p_value_i:.4f}")
 
     # for graphs
     df_combined = pd.concat([df_est, df_main], ignore_index=True)
