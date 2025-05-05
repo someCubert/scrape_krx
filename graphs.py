@@ -16,8 +16,8 @@ plt.figure(figsize=(12, 6))
 sns.lineplot(data=df, x='Year', y='GDP growth rate (%)')
 plt.grid(True)
 plt.xticks(years)
-plt.xlim(2005, 2023)  # Set x-axis limits to match data range
-os.makedirs('plots', exist_ok=True)  # Create 'plots' subfolder if it doesn't exist
+plt.xlim(2005, 2023) 
+os.makedirs('plots', exist_ok=True)  
 plt.savefig('plots/gdp_growth_rate.png', dpi=300, bbox_inches='tight')
 plt.close()
 
