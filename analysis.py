@@ -94,7 +94,7 @@ def generalized_sign_test(df_event, df_est, firm_codes):
 
     return p, q, n, Z
 
-def plot_CAAFO_over_time_variable_ranges(dfs, labels, event_dates, min_plot_day=-180, max_plot_day=270):
+def plot_CAAFO_over_time_variable_ranges(file_name, dfs, labels, event_dates, min_plot_day=-180, max_plot_day=270):
     plt.figure(figsize=(14, 7))
 
     all_min_days = []
@@ -131,12 +131,12 @@ def plot_CAAFO_over_time_variable_ranges(dfs, labels, event_dates, min_plot_day=
     by_label = dict(zip(legend_labels, handles))
     plt.legend(by_label.values(), by_label.keys())
 
-    plt.grid(True, which='both', linestyle='--', linewidth=0.5)
+    plt.grid(True)
 
     plt.axhline(y=0, color='grey', linestyle=':', linewidth=1)
-
-    plt.tight_layout()
-    plt.show()
+    os.makedirs('plots', exist_ok=True)  # Create 'plots' subfolder if it doesn't exist
+    plt.savefig(f'plots/{file_name}.png', dpi=300, bbox_inches='tight')
+    plt.close()
 
     actual_min_plot = min(all_min_days) if all_min_days else min_plot_day
     actual_max_plot = max(all_max_days) if all_max_days else max_plot_day
@@ -266,8 +266,18 @@ plot_start_day = -180
 plot_end_day = 270
 
 plot_CAAFO_over_time_variable_ranges(
+    file_name='market',
     dfs=[m_pFSCMA, m_pShort1, m_pShort2, m_pLEIs, m_pForexW, m_pForex],
-    labels=['FSCMA (2009)', 'Short Ban 1 (2020)', 'Short Ban 2 (2023)', 'LEIs (2023)', 'Forex With Pilot (2024)', 'Forex without Pilot (2024)'],
+    labels=['FSCMA (2009)', 'Short Selling Ban (2020)', 'Short Selling Ban (2023)', 'LEIs (2023)', 'Forex With Pilot (2024)', 'Forex without Pilot (2024)'],
+    event_dates=['2009-02-04', '2020-03-13', '2023-11-06', '2023-12-14', '2024-07-01', '2024-07-01'],
+    min_plot_day=plot_start_day,
+    max_plot_day=plot_end_day
+)
+
+plot_CAAFO_over_time_variable_ranges(
+    file_name='KOSPI200',
+    dfs=[K_pFSCMA, K_pShort1, K_pShort2, K_pLEIs, K_pForexW, K_pForex],
+    labels=['FSCMA (2009)', 'Short Selling Ban (2020)', 'Short Selling Ban (2023)', 'LEIs (2023)', 'Forex With Pilot (2024)', 'Forex without Pilot (2024)'],
     event_dates=['2009-02-04', '2020-03-13', '2023-11-06', '2023-12-14', '2024-07-01', '2024-07-01'],
     min_plot_day=plot_start_day,
     max_plot_day=plot_end_day
