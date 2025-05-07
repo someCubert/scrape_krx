@@ -59,7 +59,9 @@ def calculate_CAAFO_industry(df, date_str):
 
     industry_mapping = df[df['date'] == date][['Issue code', 'Industry']].drop_duplicates().set_index('Issue code')['Industry']
     df['Industry'] = df['Issue code'].map(industry_mapping)
-
+    industry_counts = df[df['date'] == date][['Issue code', 'Industry']].groupby('Industry').size()
+    valid_industries = industry_counts[industry_counts >= 5].index
+    df = df[df['Industry'].isin(valid_industries)]
     df = df[['date', 'Industry', 'Market Cap Weight', 'CAFO']]
     df['wCAFO'] = df['Market Cap Weight'] * df['CAFO']
 
