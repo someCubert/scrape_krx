@@ -1,6 +1,6 @@
 # Foreign ownership by issue Download
 
-This programm is only used to download foreign ownership data on a daily, company basis. In case you might need other data minor changes should be made to the download files. Analysis files are exclusive to my project and should be rewritten in case of a fork.
+This programm is used to download foreign ownership data on a daily, company basis. In case you might need other data minor changes should be made to the download files. Analysis files are exclusive to my project and should be rewritten in case of a fork.
 
 ## Download Instructions
 
@@ -19,3 +19,5 @@ python download_icbi.py
 python readJSON.py
 ```
 The file python extract_change_data_for_issue_code.py is only used to track the namechanges of companies.
+
+(for ease of you use you can also use the run files)
