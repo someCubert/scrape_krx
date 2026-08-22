@@ -21,9 +21,18 @@ def calculate_date(date_str, days):
     
     return new_date_str
 
+def nearest_trading_day(df, date_str):
+    """Latest available date <= date_str."""
+    dates = pd.to_datetime(df['date']).unique()
+    target = pd.to_datetime(date_str)
+    valid = dates[dates <= target]
+    if len(valid) == 0:
+        raise ValueError(f"No trading day on or before {date_str}")
+    return pd.Timestamp(valid.max())
+
 def calculate_CAAFO_market(df, date_str):
     df = df.copy()
-    date = datetime.strptime(date_str, '%Y-%m-%d')
+    date = nearest_trading_day(df, date_str)
     df['date'] = pd.to_datetime(df['date'])
 
     base_date_df = df[df['date'] == date].copy()
@@ -40,9 +49,10 @@ def calculate_CAAFO_market(df, date_str):
 
     return df
 
+
 def calculate_CAAFO_KOSPI200(df, const, date_str):
     df = df.copy()
-    date = datetime.strptime(date_str, '%Y-%m-%d')
+    date = nearest_trading_day(df, date_str)
     df['date'] = pd.to_datetime(df['date'])
     df_kospi200 = df[df['Issue code'].isin(const)].copy()
     
@@ -100,7 +110,11 @@ def plot_CAAFO_over_time_variable_ranges(file_name, dfs, labels, event_dates, mi
                           (df_plot['days_from_event'] <= max_plot_day)]
 
         if not df_plot.empty:
-            start_day_value = df_plot[df_plot['days_from_event'] == 0]['CAAFO'].values[0]
+            pre = df_plot[df_plot['days_from_event'] <= 0]
+            if pre.empty:
+                print(f"Warning: no data at or before day 0 for '{label}'")
+                continue
+            start_day_value = pre['CAAFO'].iloc[-1]
             df_plot['CAAFO_adjusted_for_plot'] = df_plot['CAAFO'] - start_day_value
             plt.plot(df_plot['days_from_event'], df_plot['CAAFO_adjusted_for_plot'], label=label, linestyle='-')
         else:
@@ -186,8 +200,19 @@ def policy_change_analysis(conn, date_str, event_1, event_2, est_1, est_2, const
     
     df_main['date'] = pd.to_datetime(df_main['date'])
     df_main = df_main[df_main['date'] >= pd.to_datetime(date_str)]
-    df_main = df_main.dropna(subset=['Daily change (ER)'])
-    df_main = df_main.dropna(subset=['Est. daily change'])
+    df_main = df_main.dropna(subset=['Daily change (ER)', 'Est. daily change'])
+
+    final_firms = set(df_main['Issue code'].unique()) & set(df_est['Issue code'].unique())
+    df_main = df_main[df_main['Issue code'].isin(final_firms)]
+    df_est  = df_est[df_est['Issue code'].isin(final_firms)]
+
+    counts = df_main.groupby('Issue code')['date'].nunique()
+    req = df_main['date'].nunique()
+    complete = counts[counts == req].index
+    print(f"{os.name}: {len(complete)} complete of {len(counts)} firms ({len(complete)/len(counts):.1%})")
+    df_main = df_main[df_main['Issue code'].isin(complete)]
+
+
     df_main['AFO'] = df_main['Daily change (ER)'] - df_main['Est. daily change']
     df_main['CAFO'] = df_main.groupby('Issue code')['AFO'].transform(lambda x: x.cumsum())
 
